@@ -3,8 +3,6 @@ name = "sui_wheel"
 edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-version = "0.0.6"
-published-at = "0x62b9100755f45fbe0fe8a07c3bfb6c67bc7bdf0913ead684ca20582fe406f6a8"
 
 [dependencies]
 

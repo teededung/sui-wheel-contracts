@@ -232,23 +232,16 @@ fun select_winner(
     ctx: &mut TxContext,
     num_entries: u64,
 ): address {
+    let unique = count_unique(remaining_entries, ctx);
     let winner_addr: address;
-    if (num_entries == 1) {
-        // Auto-assign if only one entry left
+    if (num_entries == 1 || unique == 1) {
         winner_addr = vector::pop_back(remaining_entries);
+        remove_all_occurrences(remaining_entries, winner_addr);
     } else {
         let mut generator = random::new_generator(random, ctx);
         let rand_index = generator.generate_u64_in_range(0, num_entries - 1);
         winner_addr = vector::swap_remove(remaining_entries, rand_index);
-        // Remove all other entries of this winner_addr
-        let mut i = 0;
-        while (i < vector::length(remaining_entries)) {
-            if (*vector::borrow(remaining_entries, i) == winner_addr) {
-                vector::swap_remove(remaining_entries, i);
-            } else {
-                i = i + 1;
-            };
-        };
+        remove_all_occurrences(remaining_entries, winner_addr);
     };
     winner_addr
 }
@@ -292,12 +285,29 @@ fun validate_entry_order(entry_order: &vector<u64>, num_entries: u64) {
 }
 
 /// Attempts to auto-assign the last prize if conditions are met
-fun try_auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock) {
+fun try_auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext) {
     let num_prizes = vector::length(&wheel.prize_amounts);
     let num_remaining_entries = vector::length(&wheel.remaining_entries);
-    if (wheel.spun_count + 1 == num_prizes && num_remaining_entries == 1) {
+    if (num_remaining_entries == 0) {
+        return
+    };
+    let unique = count_unique(&wheel.remaining_entries, ctx);
+    if (wheel.spun_count + 1 == num_prizes && unique == 1) {
         let last_winner_addr = vector::pop_back(&mut wheel.remaining_entries);
+        remove_all_occurrences(&mut wheel.remaining_entries, last_winner_addr);
         add_winner_and_emit(wheel, last_winner_addr, clock);
+    };
+}
+
+// Removes all occurrences of the given address from the vector.
+fun remove_all_occurrences(entries: &mut vector<address>, addr: address) {
+    let mut i = 0;
+    while (i < vector::length(entries)) {
+        if (*vector::borrow(entries, i) == addr) {
+            vector::swap_remove(entries, i);
+        } else {
+            i = i + 1;
+        };
     };
 }
 
@@ -494,41 +504,43 @@ entry fun spin_wheel(wheel: &mut Wheel, random: &Random, clock: &Clock, ctx: &mu
 /// Performs a spin on the wheel, selecting a random winner from a shuffled index order.
 entry fun spin_wheel_with_order(
     wheel: &mut Wheel,
-    entry_order: vector<u64>, // Shuffled index order
+    entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
-
     let num_entries = vector::length(&wheel.remaining_entries);
     validate_entry_order(&entry_order, num_entries);
-
-    // Select winner using shuffled order
-    let mut generator = random::new_generator(random, ctx);
-    let rand_index = generator.generate_u64_in_range(0, num_entries - 1);
-    let shuffled_idx = *vector::borrow(&entry_order, rand_index);
-    let winner_addr = *vector::borrow(&wheel.remaining_entries, shuffled_idx);
-
-    // Remove winner from remaining_entries
-    vector::swap_remove(&mut wheel.remaining_entries, shuffled_idx);
-
+    let unique = count_unique(&wheel.remaining_entries, ctx);
+    let winner_addr: address;
+    if (unique == 1) {
+        winner_addr = vector::pop_back(&mut wheel.remaining_entries);
+        remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
+    } else {
+        let mut generator = random::new_generator(random, ctx);
+        let rand_index = generator.generate_u64_in_range(0, num_entries - 1);
+        let shuffled_idx = *vector::borrow(&entry_order, rand_index);
+        winner_addr = *vector::borrow(&wheel.remaining_entries, shuffled_idx);
+        vector::swap_remove(&mut wheel.remaining_entries, shuffled_idx);
+        remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
+    };
     add_winner_and_emit(wheel, winner_addr, clock);
 }
 
 /// Auto-assigns the last prize if only one entry remains and it's the final spin.
 /// Can only be called by organizer.
-entry fun auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock, ctx: &TxContext) {
+entry fun auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext) {
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     let num_prizes = vector::length(&wheel.prize_amounts);
     assert!(wheel.spun_count + 1 == num_prizes, EAlreadySpunMax); // Only for last prize
     let num_entries = vector::length(&wheel.remaining_entries);
-    assert!(num_entries == 1, ENoEntries); // Must have exactly 1 remaining
-
-    // Auto-assign
+    let unique = count_unique(&wheel.remaining_entries, ctx);
+    assert!(unique == 1 && num_entries > 0, ENoEntries); // Updated check
     let winner_addr = vector::pop_back(&mut wheel.remaining_entries);
+    remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
     add_winner_and_emit(wheel, winner_addr, clock);
 }
 
@@ -543,43 +555,39 @@ entry fun spin_wheel_and_assign_last_prize(
 ) {
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
-
     let num_entries = vector::length(&wheel.remaining_entries);
     let winner_addr = select_winner(&mut wheel.remaining_entries, random, ctx, num_entries);
     add_winner_and_emit(wheel, winner_addr, clock);
-
-    // Try to auto-assign the last prize if conditions are met
-    try_auto_assign_last_prize(wheel, clock);
+    try_auto_assign_last_prize(wheel, clock, ctx);
 }
 
 /// Performs a spin on the wheel, selecting a random winner from a shuffled index order, and auto-assigns the last prize in the same transaction.
 entry fun spin_wheel_and_assign_last_prize_with_order(
     wheel: &mut Wheel,
-    entry_order: vector<u64>, // Shuffled index order
+    entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
-
     let num_entries = vector::length(&wheel.remaining_entries);
     validate_entry_order(&entry_order, num_entries);
-
-    // Select winner based on shuffled order
-    let mut generator = random::new_generator(random, ctx);
-    let rand_index = generator.generate_u64_in_range(0, num_entries - 1);
-    let shuffled_idx = *vector::borrow(&entry_order, rand_index);
-    let winner_addr = *vector::borrow(&wheel.remaining_entries, shuffled_idx);
-
-    // Remove winner from entries
-    vector::swap_remove(&mut wheel.remaining_entries, shuffled_idx);
-
-    // Add and emit
+    let unique = count_unique(&wheel.remaining_entries, ctx);
+    let winner_addr: address;
+    if (unique == 1) {
+        winner_addr = vector::pop_back(&mut wheel.remaining_entries);
+        remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
+    } else {
+        let mut generator = random::new_generator(random, ctx);
+        let rand_index = generator.generate_u64_in_range(0, num_entries - 1);
+        let shuffled_idx = *vector::borrow(&entry_order, rand_index);
+        winner_addr = *vector::borrow(&wheel.remaining_entries, shuffled_idx);
+        vector::swap_remove(&mut wheel.remaining_entries, shuffled_idx);
+        remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
+    };
     add_winner_and_emit(wheel, winner_addr, clock);
-
-    // Try to auto-assign the last prize if conditions are met
-    try_auto_assign_last_prize(wheel, clock);
+    try_auto_assign_last_prize(wheel, clock, ctx);
 }
 
 /// Cancels the wheel if no spins have occurred, reclaims the pool, and deactivates it.
