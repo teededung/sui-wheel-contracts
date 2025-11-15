@@ -7,6 +7,7 @@ use sui::event;
 use sui::random::{Self, Random};
 use sui::sui::SUI;
 use sui::table::{Self, Table};
+use sui_wheel::version::{Self, Version};
 
 // === Constants ===
 
@@ -320,8 +321,10 @@ public fun create_wheel(
     prize_amounts: vector<u64>,
     delay_ms: u64,
     claim_window_ms: u64,
+    v: &Version,
     ctx: &mut TxContext,
 ): Wheel {
+    version::check_is_valid(v);
     let num_entries = vector::length(&entries);
     let num_prizes = vector::length(&prize_amounts);
     assert!(num_entries >= MIN_ENTRIES && num_entries <= MAX_ENTRIES, EInvalidEntriesCount);
@@ -438,7 +441,8 @@ public fun update_claim_window_ms(
 
 /// Allows a winner to claim their prize if within the allowed time window.
 /// Returns the claimed Coin<SUI>.
-public fun claim_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
+public fun claim_prize(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<SUI> {
+    version::check_is_valid(v);
     assert!(!wheel.is_cancelled, EWheelCancelled);
     let sender = tx_context::sender(ctx);
     let mut i = 0;
@@ -469,7 +473,8 @@ public fun claim_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext): C
 
 /// Allows the organizer to reclaim any remaining funds in the pool after the claim window has passed for all spins.
 /// Returns the reclaimed Coin<SUI>.
-public fun reclaim_pool(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
+public fun reclaim_pool(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<SUI> {
+    version::check_is_valid(v);
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count == vector::length(&wheel.prize_amounts), EAlreadySpunMax);
@@ -492,7 +497,8 @@ public fun reclaim_pool(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext): 
 }
 
 /// Performs a spin on the wheel, selecting a random winner and removing them from future spins.
-entry fun spin_wheel(wheel: &mut Wheel, random: &Random, clock: &Clock, ctx: &mut TxContext) {
+entry fun spin_wheel(wheel: &mut Wheel, random: &Random, clock: &Clock, v: &Version, ctx: &mut TxContext) {
+    version::check_is_valid(v);
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
 
@@ -507,8 +513,10 @@ entry fun spin_wheel_with_order(
     entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
+    v: &Version,
     ctx: &mut TxContext,
 ) {
+    version::check_is_valid(v);
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
     let num_entries = vector::length(&wheel.remaining_entries);
@@ -529,21 +537,6 @@ entry fun spin_wheel_with_order(
     add_winner_and_emit(wheel, winner_addr, clock);
 }
 
-/// Auto-assigns the last prize if only one entry remains and it's the final spin.
-/// Can only be called by organizer.
-entry fun auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext) {
-    assert!(!wheel.is_cancelled, EWheelCancelled);
-    assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
-    let num_prizes = vector::length(&wheel.prize_amounts);
-    assert!(wheel.spun_count + 1 == num_prizes, EAlreadySpunMax); // Only for last prize
-    let num_entries = vector::length(&wheel.remaining_entries);
-    let unique = count_unique(&wheel.remaining_entries, ctx);
-    assert!(unique == 1 && num_entries > 0, ENoEntries); // Updated check
-    let winner_addr = vector::pop_back(&mut wheel.remaining_entries);
-    remove_all_occurrences(&mut wheel.remaining_entries, winner_addr);
-    add_winner_and_emit(wheel, winner_addr, clock);
-}
-
 /// Performs a spin on the wheel and, if conditions are met afterward, auto-assigns the last prize in the same transaction.
 /// This combines `spin_wheel` and `auto_assign_last_prize` for efficiency when the front-end detects that the next spin
 /// will leave one entry and one prize remaining.
@@ -551,8 +544,10 @@ entry fun spin_wheel_and_assign_last_prize(
     wheel: &mut Wheel,
     random: &Random,
     clock: &Clock,
+    v: &Version,
     ctx: &mut TxContext,
 ) {
+    version::check_is_valid(v);
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
     let num_entries = vector::length(&wheel.remaining_entries);
@@ -567,8 +562,10 @@ entry fun spin_wheel_and_assign_last_prize_with_order(
     entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
+    v: &Version,
     ctx: &mut TxContext,
 ) {
+    version::check_is_valid(v);
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
     let num_entries = vector::length(&wheel.remaining_entries);
@@ -594,8 +591,10 @@ entry fun spin_wheel_and_assign_last_prize_with_order(
 /// Returns the reclaimed Coin<SUI> if pool has balance.
 public fun cancel_wheel_and_reclaim_pool(
     wheel: &mut Wheel,
+    v: &Version,
     ctx: &mut TxContext,
 ): Option<Coin<SUI>> {
+    version::check_is_valid(v);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count == 0, EAlreadySpunMax); // Only allow before any spins
     assert!(!wheel.is_cancelled, EAlreadyCancelled);
