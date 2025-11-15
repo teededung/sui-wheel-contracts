@@ -3,3 +3,8 @@ build/*
 .coverage*
 .DS_Store
 .env
+
+# IDE
+.vscode
+.kiro
+.cursor
