@@ -5,7 +5,6 @@ use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::event;
 use sui::random::{Self, Random};
-use sui::sui::SUI;
 use sui::table::{Self, Table};
 use sui_wheel::version::{Self, Version};
 
@@ -33,7 +32,7 @@ const DEFAULT_CLAIM_WINDOW_MS: u64 = 86400000; // 24 hours
 // === Structs ===
 
 /// The main structure for the wheel game, managing entries, winners, prizes, and the prize pool.
-public struct Wheel has key {
+public struct Wheel<phantom T> has key {
     /// Unique identifier for the wheel object.
     id: UID,
     /// Address of the organizer who created the wheel.
@@ -52,8 +51,8 @@ public struct Wheel has key {
     delay_ms: u64,
     /// Time window in milliseconds for claiming the prize after the delay.
     claim_window_ms: u64,
-    /// Balance pool holding the SUI for prizes.
-    pool: Balance<SUI>,
+    /// Balance pool holding the token for prizes.
+    pool: Balance<T>,
     /// Flag indicating if the wheel has been cancelled.
     is_cancelled: bool,
 }
@@ -109,22 +108,22 @@ public struct ReclaimEvent has copy, drop {
 // === Accessors ===
 
 /// Returns the organizer address.
-public fun organizer(self: &Wheel): address {
+public fun organizer<T>(self: &Wheel<T>): address {
     self.organizer
 }
 
 /// Returns a reference to the remaining entries.
-public fun remaining_entries(self: &Wheel): &vector<address> {
+public fun remaining_entries<T>(self: &Wheel<T>): &vector<address> {
     &self.remaining_entries
 }
 
 /// Returns a reference to the prize amounts.
-public fun prize_amounts(self: &Wheel): &vector<u64> {
+public fun prize_amounts<T>(self: &Wheel<T>): &vector<u64> {
     &self.prize_amounts
 }
 
 /// Returns a reference to the winners.
-public fun winners(self: &Wheel): &vector<Winner> {
+public fun winners<T>(self: &Wheel<T>): &vector<Winner> {
     &self.winners
 }
 
@@ -134,32 +133,32 @@ public fun winner_addr(winner: &Winner): address {
 }
 
 /// Returns a reference to the spin times.
-public fun spin_times(self: &Wheel): &vector<u64> {
+public fun spin_times<T>(self: &Wheel<T>): &vector<u64> {
     &self.spin_times
 }
 
 /// Returns the delay in milliseconds.
-public fun delay_ms(self: &Wheel): u64 {
+public fun delay_ms<T>(self: &Wheel<T>): u64 {
     self.delay_ms
 }
 
 /// Returns the claim window in milliseconds.
-public fun claim_window_ms(self: &Wheel): u64 {
+public fun claim_window_ms<T>(self: &Wheel<T>): u64 {
     self.claim_window_ms
 }
 
 /// Returns the current value of the prize pool.
-public fun pool_value(self: &Wheel): u64 {
+public fun pool_value<T>(self: &Wheel<T>): u64 {
     balance::value(&self.pool)
 }
 
 /// Returns whether the wheel is cancelled.
-public fun is_cancelled(self: &Wheel): bool {
+public fun is_cancelled<T>(self: &Wheel<T>): bool {
     self.is_cancelled
 }
 
 /// Returns the number of spins performed.
-public fun spun_count(self: &Wheel): u64 {
+public fun spun_count<T>(self: &Wheel<T>): u64 {
     self.spun_count
 }
 
@@ -199,13 +198,13 @@ fun count_unique(entries: &vector<address>, ctx: &mut TxContext): u64 {
 /// Shares the Wheel object publicly.
 /// This function must be called after creating and optionally mutating the Wheel (e.g., donating to pool)
 /// to make it accessible as a shared object.
-public fun share_wheel(wheel: Wheel) {
+public fun share_wheel<T>(wheel: Wheel<T>) {
     transfer::share_object(wheel);
 }
 
-/// Transfers the optional Coin<SUI> to the recipient if present, or destroys the none option.
+/// Transfers the optional Coin<T> to the recipient if present, or destroys the none option.
 /// This helper function allows handling the return value of cancel_wheel_and_reclaim_pool in a PTB without conditionals.
-public fun transfer_optional_reclaim(mut opt: Option<Coin<SUI>>, recipient: address) {
+public fun transfer_optional_reclaim<T>(mut opt: Option<Coin<T>>, recipient: address) {
     if (option::is_some(&opt)) {
         let coin = option::extract(&mut opt);
         transfer::public_transfer(coin, recipient);
@@ -248,7 +247,7 @@ fun select_winner(
 }
 
 /// Adds the winner to the list, records spin time, increments spun_count, and emits the event.
-fun add_winner_and_emit(wheel: &mut Wheel, winner_addr: address, clock: &Clock) {
+fun add_winner_and_emit<T>(wheel: &mut Wheel<T>, winner_addr: address, clock: &Clock) {
     let prize_index = wheel.spun_count;
     vector::push_back(
         &mut wheel.winners,
@@ -260,7 +259,7 @@ fun add_winner_and_emit(wheel: &mut Wheel, winner_addr: address, clock: &Clock) 
 }
 
 /// Validates common preconditions for spin operations
-fun validate_spin_preconditions(wheel: &Wheel, ctx: &TxContext) {
+fun validate_spin_preconditions<T>(wheel: &Wheel<T>, ctx: &TxContext) {
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count < vector::length(&wheel.prize_amounts), EAlreadySpunMax);
@@ -269,7 +268,7 @@ fun validate_spin_preconditions(wheel: &Wheel, ctx: &TxContext) {
 }
 
 /// Checks if the pool has sufficient funds for all prizes
-fun check_pool_sufficiency(wheel: &Wheel) {
+fun check_pool_sufficiency<T>(wheel: &Wheel<T>) {
     let total_prizes = sum_prize_amounts(&wheel.prize_amounts);
     assert!(balance::value(&wheel.pool) >= total_prizes, EInsufficientPool);
 }
@@ -286,7 +285,7 @@ fun validate_entry_order(entry_order: &vector<u64>, num_entries: u64) {
 }
 
 /// Attempts to auto-assign the last prize if conditions are met
-fun try_auto_assign_last_prize(wheel: &mut Wheel, clock: &Clock, ctx: &mut TxContext) {
+fun try_auto_assign_last_prize<T>(wheel: &mut Wheel<T>, clock: &Clock, ctx: &mut TxContext) {
     let num_prizes = vector::length(&wheel.prize_amounts);
     let num_remaining_entries = vector::length(&wheel.remaining_entries);
     if (num_remaining_entries == 0) {
@@ -316,14 +315,14 @@ fun remove_all_occurrences(entries: &mut vector<address>, addr: address) {
 
 /// Creates a new wheel with the given entries, prize amounts, delay, and claim window.
 /// Returns the ID of the created wheel.
-public fun create_wheel(
+public fun create_wheel<T>(
     entries: vector<address>,
     prize_amounts: vector<u64>,
     delay_ms: u64,
     claim_window_ms: u64,
     v: &Version,
     ctx: &mut TxContext,
-): Wheel {
+): Wheel<T> {
     version::check_is_valid(v);
     let num_entries = vector::length(&entries);
     let num_prizes = vector::length(&prize_amounts);
@@ -349,7 +348,7 @@ public fun create_wheel(
         spin_times: vector::empty(),
         delay_ms,
         claim_window_ms: claim_window,
-        pool: balance::zero(),
+        pool: balance::zero<T>(),
         is_cancelled: false,
     };
     event::emit(CreateEvent {
@@ -359,9 +358,9 @@ public fun create_wheel(
     wheel
 }
 
-/// Allows the organizer to donate SUI to the wheel's prize pool.
+/// Allows the organizer to donate tokens to the wheel's prize pool.
 /// No sufficiency check here to allow incremental donations; check happens before spins.
-public fun donate_to_pool(wheel: &mut Wheel, coin: Coin<SUI>, ctx: &mut TxContext) {
+public fun donate_to_pool<T>(wheel: &mut Wheel<T>, coin: Coin<T>, ctx: &mut TxContext) {
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     balance::join(&mut wheel.pool, coin::into_balance(coin));
@@ -370,7 +369,7 @@ public fun donate_to_pool(wheel: &mut Wheel, coin: Coin<SUI>, ctx: &mut TxContex
 }
 
 /// Updates the remaining_entries if no spins have occurred yet.
-public fun update_entries(wheel: &mut Wheel, new_entries: vector<address>, ctx: &mut TxContext) {
+public fun update_entries<T>(wheel: &mut Wheel<T>, new_entries: vector<address>, ctx: &mut TxContext) {
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count == 0, EAlreadySpunMax); // Only allow before any spins
@@ -385,8 +384,8 @@ public fun update_entries(wheel: &mut Wheel, new_entries: vector<address>, ctx: 
 
 /// Updates the prize_amounts if no spins have occurred yet.
 /// Also resets winners and spin_times since prizes changed.
-public fun update_prize_amounts(
-    wheel: &mut Wheel,
+public fun update_prize_amounts<T>(
+    wheel: &mut Wheel<T>,
     new_prize_amounts: vector<u64>,
     ctx: &mut TxContext,
 ) {
@@ -413,7 +412,7 @@ public fun update_prize_amounts(
 }
 
 /// Updates the delay_ms if no spins have occurred yet.
-public fun update_delay_ms(wheel: &mut Wheel, new_delay_ms: u64, ctx: &mut TxContext) {
+public fun update_delay_ms<T>(wheel: &mut Wheel<T>, new_delay_ms: u64, ctx: &mut TxContext) {
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count == 0, EAlreadySpunMax); // Only allow before any spins
@@ -421,8 +420,8 @@ public fun update_delay_ms(wheel: &mut Wheel, new_delay_ms: u64, ctx: &mut TxCon
 }
 
 /// Updates the claim_window_ms if no spins have occurred yet.
-public fun update_claim_window_ms(
-    wheel: &mut Wheel,
+public fun update_claim_window_ms<T>(
+    wheel: &mut Wheel<T>,
     new_claim_window_ms: u64,
     ctx: &mut TxContext,
 ) {
@@ -440,8 +439,8 @@ public fun update_claim_window_ms(
 }
 
 /// Allows a winner to claim their prize if within the allowed time window.
-/// Returns the claimed Coin<SUI>.
-public fun claim_prize(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<SUI> {
+/// Returns the claimed Coin<T>.
+public fun claim_prize<T>(wheel: &mut Wheel<T>, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<T> {
     version::check_is_valid(v);
     assert!(!wheel.is_cancelled, EWheelCancelled);
     let sender = tx_context::sender(ctx);
@@ -472,8 +471,8 @@ public fun claim_prize(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut 
 }
 
 /// Allows the organizer to reclaim any remaining funds in the pool after the claim window has passed for all spins.
-/// Returns the reclaimed Coin<SUI>.
-public fun reclaim_pool(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<SUI> {
+/// Returns the reclaimed Coin<T>.
+public fun reclaim_pool<T>(wheel: &mut Wheel<T>, clock: &Clock, v: &Version, ctx: &mut TxContext): Coin<T> {
     version::check_is_valid(v);
     assert!(!wheel.is_cancelled, EWheelCancelled);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
@@ -497,7 +496,7 @@ public fun reclaim_pool(wheel: &mut Wheel, clock: &Clock, v: &Version, ctx: &mut
 }
 
 /// Performs a spin on the wheel, selecting a random winner and removing them from future spins.
-entry fun spin_wheel(wheel: &mut Wheel, random: &Random, clock: &Clock, v: &Version, ctx: &mut TxContext) {
+entry fun spin_wheel<T>(wheel: &mut Wheel<T>, random: &Random, clock: &Clock, v: &Version, ctx: &mut TxContext) {
     version::check_is_valid(v);
     validate_spin_preconditions(wheel, ctx);
     check_pool_sufficiency(wheel);
@@ -508,8 +507,8 @@ entry fun spin_wheel(wheel: &mut Wheel, random: &Random, clock: &Clock, v: &Vers
 }
 
 /// Performs a spin on the wheel, selecting a random winner from a shuffled index order.
-entry fun spin_wheel_with_order(
-    wheel: &mut Wheel,
+entry fun spin_wheel_with_order<T>(
+    wheel: &mut Wheel<T>,
     entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
@@ -540,8 +539,8 @@ entry fun spin_wheel_with_order(
 /// Performs a spin on the wheel and, if conditions are met afterward, auto-assigns the last prize in the same transaction.
 /// This combines `spin_wheel` and `auto_assign_last_prize` for efficiency when the front-end detects that the next spin
 /// will leave one entry and one prize remaining.
-entry fun spin_wheel_and_assign_last_prize(
-    wheel: &mut Wheel,
+entry fun spin_wheel_and_assign_last_prize<T>(
+    wheel: &mut Wheel<T>,
     random: &Random,
     clock: &Clock,
     v: &Version,
@@ -557,8 +556,8 @@ entry fun spin_wheel_and_assign_last_prize(
 }
 
 /// Performs a spin on the wheel, selecting a random winner from a shuffled index order, and auto-assigns the last prize in the same transaction.
-entry fun spin_wheel_and_assign_last_prize_with_order(
-    wheel: &mut Wheel,
+entry fun spin_wheel_and_assign_last_prize_with_order<T>(
+    wheel: &mut Wheel<T>,
     entry_order: vector<u64>,
     random: &Random,
     clock: &Clock,
@@ -588,12 +587,12 @@ entry fun spin_wheel_and_assign_last_prize_with_order(
 }
 
 /// Cancels the wheel if no spins have occurred, reclaims the pool, and deactivates it.
-/// Returns the reclaimed Coin<SUI> if pool has balance.
-public fun cancel_wheel_and_reclaim_pool(
-    wheel: &mut Wheel,
+/// Returns the reclaimed Coin<T> if pool has balance.
+public fun cancel_wheel_and_reclaim_pool<T>(
+    wheel: &mut Wheel<T>,
     v: &Version,
     ctx: &mut TxContext,
-): Option<Coin<SUI>> {
+): Option<Coin<T>> {
     version::check_is_valid(v);
     assert!(tx_context::sender(ctx) == wheel.organizer, ENotOrganizer);
     assert!(wheel.spun_count == 0, EAlreadySpunMax); // Only allow before any spins

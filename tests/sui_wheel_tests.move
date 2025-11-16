@@ -45,11 +45,11 @@ fun test_create_wheel_success() {
     let delay_ms = 3600000;
     let claim_window_ms = 86400000;
 
-    let wheel = create_wheel(entries, prize_amounts, delay_ms, claim_window_ms, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, delay_ms, claim_window_ms, &version, scenario.ctx());
     share_wheel(wheel);
 
     scenario.next_tx(@0xCAFE);
-    let wheel: Wheel = scenario.take_shared<Wheel>();
+    let wheel: Wheel<SUI> = scenario.take_shared<Wheel<SUI>>();
 
     assert!(sui_wheel::organizer(&wheel) == @0xCAFE, 0);
     assert!(vector::length(sui_wheel::remaining_entries(&wheel)) == 3, 0);
@@ -74,7 +74,7 @@ fun test_create_wheel_invalid_entries_min() {
     let entries = vector[@0xA];
     let prize_amounts = vector[1000];
 
-    let _wheel = create_wheel(entries, prize_amounts, 0, 0, &version, ctx); //fail here
+    let _wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, ctx); //fail here
     abort 1337
 }
 
@@ -87,7 +87,7 @@ fun test_create_wheel_invalid_prizes_entries_less_than_prizes() {
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000, 500, 300];
 
-    let _wheel = create_wheel(entries, prize_amounts, 0, 0, &version, ctx);
+    let _wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, ctx);
     abort 1337
 }
 
@@ -103,14 +103,14 @@ fun test_donate_to_pool_success() {
     // Create wheel
     {
         let ctx = test_scenario::ctx(&mut scenario);
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, ctx);
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, ctx);
         share_wheel(wheel);
     };
 
     // Donate to pool
     scenario.next_tx(organizer);
     {
-        let mut wheel = test_scenario::take_shared<Wheel>(&scenario);
+        let mut wheel = test_scenario::take_shared<Wheel<SUI>>(&scenario);
         let donate_amount: u64 = 2000;
         let balance = balance::create_for_testing<SUI>(donate_amount);
         let coin = coin::from_balance(balance, scenario.ctx());
@@ -135,14 +135,14 @@ fun test_donate_to_pool_cancelled() {
     let entries = vector[@0x1, @0x2];
     {
         let prize_amounts = vector[10000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
     // Cancel wheel
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let reclaim_opt = sui_wheel::cancel_wheel_and_reclaim_pool(&mut wheel, &version, scenario.ctx());
         if (option::is_some(&reclaim_opt)) {
             let reclaim_coin = option::destroy_some(reclaim_opt);
@@ -157,7 +157,7 @@ fun test_donate_to_pool_cancelled() {
     // This should fail because the wheel is cancelled
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let donate_amount: u64 = 2000;
         let balance = balance::create_for_testing<SUI>(donate_amount);
         let coin = coin::from_balance(balance, scenario.ctx());
@@ -180,14 +180,14 @@ fun test_update_entries_and_prize_amounts_with_donate() {
     let prize_amounts = vector[1000];
 
     // First transaction: Create wheel
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Second transaction: Donate initial amount
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -198,7 +198,7 @@ fun test_update_entries_and_prize_amounts_with_donate() {
     // Third transaction: Donate additional, update entries and prizes
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         // Additional donate for new prizes
         let additional_donate: u64 = 1500; // For new total 2500
         let balance = balance::create_for_testing<SUI>(additional_donate);
@@ -232,11 +232,11 @@ fun test_update_entries_not_organizer() {
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
 
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, ctx);
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, ctx);
     share_wheel(wheel);
 
     scenario.next_tx(@0xA);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
 
     // fail here
     sui_wheel::update_entries(&mut wheel, vector[@0x1], scenario.ctx());
@@ -256,12 +256,12 @@ fun test_update_prize_amounts_success() {
     let entries = vector[@0xA, @0xB, @0xC];
     let prize_amounts = vector[1000, 200];
 
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // donate to pool
     scenario.next_tx(organizer);
-    let mut wheel: Wheel = scenario.take_shared<Wheel>();
+    let mut wheel: Wheel<SUI> = scenario.take_shared<Wheel<SUI>>();
     let coin = coin::mint_for_testing<SUI>(1500, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
 
@@ -286,14 +286,14 @@ fun test_update_prize_amounts_insufficient_pool() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
     scenario.next_tx(@0xCAFE);
     // skip donate to pool
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let new_prize_amounts = vector[2000];
         // fail here
         sui_wheel::update_prize_amounts(&mut wheel, new_prize_amounts, scenario.ctx());
@@ -317,14 +317,14 @@ fun test_update_entries_after_spin() {
 
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Donate initial amount
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -348,7 +348,7 @@ fun test_update_entries_after_spin() {
     // Spin
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         // Perform the spin to reach max spun_count (1 prize, so 1 spin)
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel(&mut wheel, &random_state, &clock, &version, scenario.ctx());
@@ -362,7 +362,7 @@ fun test_update_entries_after_spin() {
     // Attempt update_entries, which should fail (EAlreadySpunMax)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         sui_wheel::update_entries(&mut wheel, vector[@0xC, @0xD], scenario.ctx());
         test_scenario::return_shared(wheel);
     };
@@ -385,7 +385,7 @@ fun test_2_spins_success() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -393,7 +393,7 @@ fun test_2_spins_success() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -417,7 +417,7 @@ fun test_2_spins_success() {
     // Spin 1 time
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel(&mut wheel, &random_state, &clock, &version, scenario.ctx());
 
@@ -432,7 +432,7 @@ fun test_2_spins_success() {
     // Spin 2 times
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel(&mut wheel, &random_state, &clock, &version, scenario.ctx());
 
@@ -463,7 +463,7 @@ fun test_spin_and_auto_assign() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -471,7 +471,7 @@ fun test_spin_and_auto_assign() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -495,7 +495,7 @@ fun test_spin_and_auto_assign() {
     // Spin 1 time using spin_wheel
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel(&mut wheel, &random_state, &clock, &version, scenario.ctx());
 
@@ -510,7 +510,7 @@ fun test_spin_and_auto_assign() {
     // Spin again to assign the last prize
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel(&mut wheel, &random_state, &clock, &version, scenario.ctx());
 
@@ -541,7 +541,7 @@ fun test_spin_wheel_and_assign_last_prize() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -549,7 +549,7 @@ fun test_spin_wheel_and_assign_last_prize() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -573,7 +573,7 @@ fun test_spin_wheel_and_assign_last_prize() {
     // Perform combined spin and auto-assign in one transaction
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel_and_assign_last_prize(
             &mut wheel,
@@ -617,7 +617,7 @@ fun test_duplicate_pairs() {
     {
         let entries = vector[@0xA, @0xA, @0xB, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -625,7 +625,7 @@ fun test_duplicate_pairs() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -649,7 +649,7 @@ fun test_duplicate_pairs() {
     // Perform combined spin and auto-assign
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         sui_wheel::spin_wheel_and_assign_last_prize(
             &mut wheel,
@@ -693,7 +693,7 @@ fun test_spin_wheel_insufficient_pool() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -701,7 +701,7 @@ fun test_spin_wheel_insufficient_pool() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -725,7 +725,7 @@ fun test_spin_wheel_insufficient_pool() {
     // Spin
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
 
         // fail here
@@ -755,12 +755,12 @@ fun test_claim_prize_success() {
     // Create wheel with 1 prize
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Donate to pool
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let donate_balance = balance::create_for_testing<SUI>(1000);
     let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
@@ -787,7 +787,7 @@ fun test_claim_prize_success() {
 
     // Perform spin (assume deterministic winner based on seed; adjust entries/seed if needed to ensure @0xA wins)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     sui_wheel::spin_wheel(&mut wheel, &random_state, &clock_shared, &version, scenario.ctx());
     assert!(sui_wheel::spun_count(&wheel) == 1, 1);
@@ -801,7 +801,7 @@ fun test_claim_prize_success() {
 
     // Claim prize as winner (time within window: after delay=0, before spin_time + window)
     scenario.next_tx(winner_addr);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     let prize_coin = sui_wheel::claim_prize(&mut wheel, &clock_shared, &version, scenario.ctx());
     assert!(coin::value(&prize_coin) == 1000, 3);
@@ -837,12 +837,12 @@ fun test_claim_prize_too_early() {
     // Create wheel with delay_ms > 0
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
-    let wheel = create_wheel(entries, prize_amounts, 1000, 86400000, &version, scenario.ctx()); // the user only claim after 86400000 + 1000 = 86401000
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 1000, 86400000, &version, scenario.ctx()); // the user only claim after 86400000 + 1000 = 86401000
     share_wheel(wheel);
 
     // Donate to pool
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let donate_balance = balance::create_for_testing<SUI>(1000);
     let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
@@ -869,7 +869,7 @@ fun test_claim_prize_too_early() {
 
     // Perform spin (spin_time will be 1000)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     sui_wheel::spin_wheel(&mut wheel, &random_state, &clock_shared, &version, scenario.ctx());
     test_scenario::return_shared(wheel);
@@ -882,7 +882,7 @@ fun test_claim_prize_too_early() {
     clock.share_for_testing();
 
     scenario.next_tx(winner_addr);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     let _prize_coin = sui_wheel::claim_prize(&mut wheel, &clock_shared, &version, scenario.ctx()); // Should abort here
     abort 1337
@@ -902,12 +902,12 @@ fun test_reclaim_pool_success() {
     let prize_amounts = vector[1000];
     let delay_ms: u64 = 3600000; // 1 hour
     let claim_window_ms: u64 = 86400000; // 24 hours
-    let wheel = create_wheel(entries, prize_amounts, delay_ms, claim_window_ms, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, delay_ms, claim_window_ms, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Donate to pool
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let donate_balance = balance::create_for_testing<SUI>(1000);
     let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
@@ -934,7 +934,7 @@ fun test_reclaim_pool_success() {
 
     // Perform spin
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     sui_wheel::spin_wheel(&mut wheel, &random_state, &clock_shared, &version, scenario.ctx());
     assert!(sui_wheel::spun_count(&wheel) == 1, 1);
@@ -949,7 +949,7 @@ fun test_reclaim_pool_success() {
 
     // Reclaim pool as organizer (should succeed, reclaim 1000 since unclaimed)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     let reclaimed_coin = sui_wheel::reclaim_pool(&mut wheel, &clock_shared, &version, scenario.ctx());
     assert!(coin::value(&reclaimed_coin) == 1000, 2);
@@ -979,12 +979,12 @@ fun test_cancel_wheel_success() {
     // Create wheel
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Donate to pool
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let donate_balance = balance::create_for_testing<SUI>(1000);
     let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
@@ -993,7 +993,7 @@ fun test_cancel_wheel_success() {
 
     // Cancel wheel and reclaim (before any spins)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let reclaimed_opt = sui_wheel::cancel_wheel_and_reclaim_pool(&mut wheel, &version, scenario.ctx());
     assert!(sui_wheel::is_cancelled(&wheel), 1);
     assert!(sui_wheel::pool_value(&wheel) == 0, 2);
@@ -1024,12 +1024,12 @@ fun test_cancel_wheel_after_spin() {
     // Create wheel
     let entries = vector[@0xA, @0xB];
     let prize_amounts = vector[1000];
-    let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
     share_wheel(wheel);
 
     // Donate to pool
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let donate_balance = balance::create_for_testing<SUI>(1000);
     let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
     sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
@@ -1056,7 +1056,7 @@ fun test_cancel_wheel_after_spin() {
 
     // Perform spin (spun_count becomes 1)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let clock_shared = scenario.take_shared<Clock>();
     sui_wheel::spin_wheel(&mut wheel, &random_state, &clock_shared, &version, scenario.ctx());
     assert!(sui_wheel::spun_count(&wheel) == 1, 1);
@@ -1065,7 +1065,7 @@ fun test_cancel_wheel_after_spin() {
 
     // Attempt cancel after spin (should fail with EAlreadySpunMax)
     scenario.next_tx(organizer);
-    let mut wheel = scenario.take_shared<Wheel>();
+    let mut wheel = scenario.take_shared<Wheel<SUI>>();
     let _reclaimed_opt = sui_wheel::cancel_wheel_and_reclaim_pool(&mut wheel, &version, scenario.ctx()); // Aborts here
     abort 1337
 }
@@ -1082,7 +1082,7 @@ fun test_spin_wheel_with_order_success() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1090,7 +1090,7 @@ fun test_spin_wheel_with_order_success() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1113,7 +1113,7 @@ fun test_spin_wheel_with_order_success() {
     // Spin with custom order [2, 0, 1] (shuffled index order)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[2u64, 0u64, 1u64]; // Shuffled index order
         sui_wheel::spin_wheel_with_order(
@@ -1153,7 +1153,7 @@ fun test_spin_wheel_with_order_invalid_order_length() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1161,7 +1161,7 @@ fun test_spin_wheel_with_order_invalid_order_length() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1183,7 +1183,7 @@ fun test_spin_wheel_with_order_invalid_order_length() {
     // Spin with invalid order length (should be 3, but provided 2)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64, 1u64]; // Wrong length - should be 3 elements
         sui_wheel::spin_wheel_with_order(
@@ -1218,7 +1218,7 @@ fun test_spin_wheel_with_order_invalid_index() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1226,7 +1226,7 @@ fun test_spin_wheel_with_order_invalid_index() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1248,7 +1248,7 @@ fun test_spin_wheel_with_order_invalid_index() {
     // Spin with invalid index (3 is out of bounds for 3 entries)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64, 1u64, 3u64]; // Invalid index 3
         sui_wheel::spin_wheel_with_order(
@@ -1284,7 +1284,7 @@ fun test_spin_wheel_with_order_not_organizer() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1292,7 +1292,7 @@ fun test_spin_wheel_with_order_not_organizer() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1314,7 +1314,7 @@ fun test_spin_wheel_with_order_not_organizer() {
     // Non-organizer tries to spin
     scenario.next_tx(non_organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64, 1u64, 2u64];
         sui_wheel::spin_wheel_with_order(
@@ -1348,7 +1348,7 @@ fun test_spin_wheel_with_order_deterministic_selection() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1356,7 +1356,7 @@ fun test_spin_wheel_with_order_deterministic_selection() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1378,7 +1378,7 @@ fun test_spin_wheel_with_order_deterministic_selection() {
     // Spin with specific order [1, 0, 2] - should select index 1 from this order
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[1u64, 0u64, 2u64]; // Shuffled order
         sui_wheel::spin_wheel_with_order(
@@ -1434,7 +1434,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_success() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1442,7 +1442,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_success() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1465,7 +1465,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_success() {
     // Perform combined spin and auto-assign with custom order [1, 0]
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[1u64, 0u64]; // Shuffled order
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1511,7 +1511,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_pairs() {
     {
         let entries = vector[@0xA, @0xA, @0xB, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1519,7 +1519,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_pairs() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1542,7 +1542,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_pairs() {
     // Perform combined spin and auto-assign with custom order [3, 0, 1, 2]
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[3u64, 0u64, 1u64, 2u64]; // Shuffled order
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1589,7 +1589,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_length() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1597,7 +1597,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_length() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1619,7 +1619,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_length() {
     // Spin with invalid order length (should be 2, but provided 1)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64]; // Wrong length - should be 2 elements
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1654,7 +1654,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_index() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1662,7 +1662,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_index() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1684,7 +1684,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_invalid_index() {
     // Spin with invalid index (2 is out of bounds for 2 entries)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64, 2u64]; // Invalid index 2
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1720,7 +1720,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_not_organizer() {
     {
         let entries = vector[@0xA, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1728,7 +1728,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_not_organizer() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1750,7 +1750,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_not_organizer() {
     // Non-organizer tries to spin
     scenario.next_tx(non_organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[0u64, 1u64];
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1784,7 +1784,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_no_auto_assign() {
     {
         let entries = vector[@0xA, @0xB, @0xC];
         let prize_amounts = vector[1000];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1792,7 +1792,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_no_auto_assign() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1000;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1814,7 +1814,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_no_auto_assign() {
     // Spin with custom order [2, 0, 1] - should only spin once (no auto-assign)
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[2u64, 0u64, 1u64]; // Shuffled order
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1854,7 +1854,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_entries() {
     {
         let entries = vector[@0xA, @0xA, @0xB, @0xB];
         let prize_amounts = vector[1000, 500];
-        let wheel = create_wheel(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+        let wheel = create_wheel<SUI>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
         share_wheel(wheel);
     };
 
@@ -1862,7 +1862,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_entries() {
     scenario.next_tx(organizer);
     {
         let initial_donate: u64 = 1500;
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let balance = balance::create_for_testing<SUI>(initial_donate);
         let coin = coin::from_balance(balance, scenario.ctx());
         sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
@@ -1884,7 +1884,7 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_entries() {
     // Spin with custom order [3, 0, 1, 2] - should spin and auto-assign since after spin unique==1 for last prize
     scenario.next_tx(organizer);
     {
-        let mut wheel = scenario.take_shared<Wheel>();
+        let mut wheel = scenario.take_shared<Wheel<SUI>>();
         let clock = setup_clock(&mut scenario);
         let entry_order = vector[3u64, 0u64, 1u64, 2u64]; // Shuffled order
         sui_wheel::spin_wheel_and_assign_last_prize_with_order(
@@ -1916,4 +1916,211 @@ fun test_spin_wheel_and_assign_last_prize_with_order_duplicate_entries() {
     test_scenario::return_shared(version);
 
     scenario.end();
+}
+
+// === Custom Token Tests ===
+
+// Define a test token type
+public struct TEST_TOKEN has drop {}
+
+#[test]
+fun test_create_wheel_with_custom_token() {
+    let mut scenario = test_scenario::begin(@0xCAFE);
+    let version = setup_version(&mut scenario, @0xCAFE);
+    let entries = vector[@0xA, @0xB, @0xC];
+    let prize_amounts = vector[1000, 500, 200];
+    let delay_ms = 3600000;
+    let claim_window_ms = 86400000;
+
+    let wheel = create_wheel<TEST_TOKEN>(entries, prize_amounts, delay_ms, claim_window_ms, &version, scenario.ctx());
+    share_wheel(wheel);
+
+    scenario.next_tx(@0xCAFE);
+    let wheel = scenario.take_shared<sui_wheel::Wheel<TEST_TOKEN>>();
+
+    assert!(sui_wheel::organizer(&wheel) == @0xCAFE, 0);
+    assert!(vector::length(sui_wheel::remaining_entries(&wheel)) == 3, 0);
+    assert!(vector::length(sui_wheel::prize_amounts(&wheel)) == 3, 0);
+    assert!(sui_wheel::delay_ms(&wheel) == delay_ms, 0);
+    assert!(sui_wheel::claim_window_ms(&wheel) == claim_window_ms, 0);
+    assert!(sui_wheel::pool_value(&wheel) == 0, 0);
+    assert!(!sui_wheel::is_cancelled(&wheel), 0);
+
+    test_scenario::return_shared(wheel);
+    test_scenario::return_shared(version);
+
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun test_donate_custom_token_to_pool() {
+    let organizer = @0xCAFE;
+    let mut scenario = test_scenario::begin(organizer);
+    let version = setup_version(&mut scenario, organizer);
+    scenario.next_tx(organizer);
+    let entries = vector[@0xA, @0xB];
+    let prize_amounts = vector[500];
+
+    // Create wheel with custom token
+    {
+        let ctx = test_scenario::ctx(&mut scenario);
+        let wheel = create_wheel<TEST_TOKEN>(entries, prize_amounts, 0, 0, &version, ctx);
+        share_wheel(wheel);
+    };
+
+    // Donate custom token to pool
+    scenario.next_tx(organizer);
+    {
+        let mut wheel = test_scenario::take_shared<sui_wheel::Wheel<TEST_TOKEN>>(&scenario);
+        let donate_amount: u64 = 2000;
+        let balance = balance::create_for_testing<TEST_TOKEN>(donate_amount);
+        let coin = coin::from_balance(balance, scenario.ctx());
+        sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
+        assert!(sui_wheel::pool_value(&wheel) == donate_amount, 0);
+        test_scenario::return_shared(wheel);
+    };
+    test_scenario::return_shared(version);
+
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun test_claim_prize_custom_token() {
+    let admin = @0x0;
+    let organizer = @0xCAFE;
+    let winner_addr = @0xA;
+
+    let mut scenario = test_scenario::begin(organizer);
+    let version = setup_version(&mut scenario, admin);
+    scenario.next_tx(organizer);
+
+    // Create wheel with custom token and 1 prize
+    let entries = vector[@0xA, @0xB];
+    let prize_amounts = vector[1000];
+    let wheel = create_wheel<TEST_TOKEN>(entries, prize_amounts, 0, 0, &version, scenario.ctx());
+    share_wheel(wheel);
+
+    // Donate custom token to pool
+    scenario.next_tx(organizer);
+    let mut wheel = scenario.take_shared<sui_wheel::Wheel<TEST_TOKEN>>();
+    let donate_balance = balance::create_for_testing<TEST_TOKEN>(1000);
+    let donate_coin = coin::from_balance(donate_balance, scenario.ctx());
+    sui_wheel::donate_to_pool(&mut wheel, donate_coin, scenario.ctx());
+    assert!(sui_wheel::pool_value(&wheel) == 1000, 0);
+    test_scenario::return_shared(wheel);
+
+    // Setup randomness
+    scenario.next_tx(admin);
+    random::create_for_testing(scenario.ctx());
+
+    scenario.next_tx(admin);
+    let mut random_state = scenario.take_shared<Random>();
+    random_state.update_randomness_state_for_testing(
+        0,
+        x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
+        scenario.ctx(),
+    );
+
+    // Setup clock as shared for reuse across tx
+    scenario.next_tx(admin);
+    let mut clock = clock::create_for_testing(scenario.ctx());
+    clock.set_for_testing(1000); // Initial timestamp
+    clock.share_for_testing();
+
+    // Perform spin
+    scenario.next_tx(organizer);
+    let mut wheel = scenario.take_shared<sui_wheel::Wheel<TEST_TOKEN>>();
+    let clock_shared = scenario.take_shared<Clock>();
+    sui_wheel::spin_wheel(&mut wheel, &random_state, &clock_shared, &version, scenario.ctx());
+    assert!(sui_wheel::spun_count(&wheel) == 1, 1);
+
+    // Assert winner is @0xA
+    let winners = sui_wheel::winners(&wheel);
+    let winner = vector::borrow(winners, 0);
+    assert!(sui_wheel::winner_addr(winner) == winner_addr, 2);
+    test_scenario::return_shared(wheel);
+    test_scenario::return_shared(clock_shared);
+
+    // Claim prize as winner
+    scenario.next_tx(winner_addr);
+    let mut wheel = scenario.take_shared<sui_wheel::Wheel<TEST_TOKEN>>();
+    let clock_shared = scenario.take_shared<Clock>();
+    let prize_coin = sui_wheel::claim_prize(&mut wheel, &clock_shared, &version, scenario.ctx());
+    assert!(coin::value(&prize_coin) == 1000, 3);
+    let winners = sui_wheel::winners(&wheel);
+    let winner = vector::borrow(winners, 0);
+    assert!(sui_wheel::claimed(winner), 4);
+    assert!(sui_wheel::pool_value(&wheel) == 0, 5);
+    // Destroy prize coin for test cleanup
+    let prize_balance = coin::into_balance(prize_coin);
+    balance::destroy_for_testing(prize_balance);
+    test_scenario::return_shared(wheel);
+    test_scenario::return_shared(clock_shared);
+
+    // Cleanup
+    scenario.next_tx(admin);
+    test_scenario::return_shared(random_state);
+    test_scenario::return_shared(version);
+
+    scenario.end();
+}
+
+#[test]
+fun test_multiple_wheels_different_tokens() {
+    let organizer = @0xCAFE;
+    let mut scenario = test_scenario::begin(organizer);
+    let version = setup_version(&mut scenario, organizer);
+    scenario.next_tx(organizer);
+
+    // Create wheel with SUI
+    let entries_sui = vector[@0xA, @0xB];
+    let prize_amounts_sui = vector[1000];
+    let wheel_sui = create_wheel<SUI>(entries_sui, prize_amounts_sui, 0, 0, &version, scenario.ctx());
+    share_wheel(wheel_sui);
+
+    // Create wheel with TEST_TOKEN
+    let entries_test = vector[@0xC, @0xD];
+    let prize_amounts_test = vector[2000];
+    let wheel_test = create_wheel<TEST_TOKEN>(entries_test, prize_amounts_test, 0, 0, &version, scenario.ctx());
+    share_wheel(wheel_test);
+
+    // Donate to SUI wheel
+    scenario.next_tx(organizer);
+    {
+        let mut wheel = test_scenario::take_shared<sui_wheel::Wheel<SUI>>(&scenario);
+        let balance = balance::create_for_testing<SUI>(1000);
+        let coin = coin::from_balance(balance, scenario.ctx());
+        sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
+        assert!(sui_wheel::pool_value(&wheel) == 1000, 0);
+        test_scenario::return_shared(wheel);
+    };
+
+    // Donate to TEST_TOKEN wheel
+    scenario.next_tx(organizer);
+    {
+        let mut wheel = test_scenario::take_shared<sui_wheel::Wheel<TEST_TOKEN>>(&scenario);
+        let balance = balance::create_for_testing<TEST_TOKEN>(2000);
+        let coin = coin::from_balance(balance, scenario.ctx());
+        sui_wheel::donate_to_pool(&mut wheel, coin, scenario.ctx());
+        assert!(sui_wheel::pool_value(&wheel) == 2000, 1);
+        test_scenario::return_shared(wheel);
+    };
+
+    // Verify both wheels are independent
+    scenario.next_tx(organizer);
+    {
+        let wheel_sui = test_scenario::take_shared<sui_wheel::Wheel<SUI>>(&scenario);
+        let wheel_test = test_scenario::take_shared<sui_wheel::Wheel<TEST_TOKEN>>(&scenario);
+        
+        assert!(sui_wheel::pool_value(&wheel_sui) == 1000, 2);
+        assert!(sui_wheel::pool_value(&wheel_test) == 2000, 3);
+        assert!(vector::length(sui_wheel::remaining_entries(&wheel_sui)) == 2, 4);
+        assert!(vector::length(sui_wheel::remaining_entries(&wheel_test)) == 2, 5);
+        
+        test_scenario::return_shared(wheel_sui);
+        test_scenario::return_shared(wheel_test);
+    };
+
+    test_scenario::return_shared(version);
+    test_scenario::end(scenario);
 }
